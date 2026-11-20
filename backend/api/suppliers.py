@@ -1,18 +1,26 @@
-from typing import Optional, List, Set, Dict
-from fastapi import APIRouter, Depends, Query
+from typing import Optional, List, Set, Dict, Union
+from fastapi import APIRouter, Depends, Query, Path
+from fastapi.responses import JSONResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models.db import (
     Supplier,
+    SupplierAlias,
     SupplierMaterial,
     Relationship,
     Material,
     DisruptionEvent,
     Alert,
 )
-from backend.models.schemas import SupplierListItem, SupplierListResponse
+from backend.models.schemas import (
+    SupplierListItem,
+    SupplierListResponse,
+    SupplierDetailResponse,
+    SupplierDetailSupplied,
+    SupplierDetailMaterial,
+)
 
 router = APIRouter(tags=["Suppliers"])
 
@@ -148,4 +156,119 @@ def list_suppliers(
         total=total,
         limit=actual_limit,
         offset=actual_offset,
+    )
+
+
+@router.get("/suppliers/{supplier_id}", response_model=SupplierDetailResponse)
+def get_supplier(
+    supplier_id: int = Path(..., ge=1, description="Unique supplier identifier (>= 1)"),
+    db: Session = Depends(get_db),
+) -> Union[SupplierDetailResponse, JSONResponse]:
+    """
+    Retrieve supplier details by ID including aliases, materials, qualification,
+    and upstream/downstream relationships.
+    Conforms to API_SPEC.md Section 4.4.
+    """
+    # Validation guard for direct programmatic invocations
+    if isinstance(supplier_id, int) and supplier_id < 1:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "Field-level validation failed.",
+                    "details": {"supplier_id": "Must be >= 1"},
+                }
+            },
+        )
+
+    # 1. Fetch active supplier
+    supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
+    if not supplier or not supplier.is_active:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": f"Supplier {supplier_id} does not exist.",
+                    "details": {},
+                }
+            },
+        )
+
+    # 2. Aliases sorted alphabetically
+    aliases_data = (
+        db.query(SupplierAlias.alias)
+        .filter(SupplierAlias.supplier_id == supplier.id)
+        .order_by(SupplierAlias.alias.asc())
+        .all()
+    )
+    aliases = [a[0] for a in aliases_data]
+
+    # 3. Registered materials with qualification status sorted alphabetically by material name
+    materials_data = (
+        db.query(Material.id, Material.name, SupplierMaterial.is_qualified)
+        .select_from(SupplierMaterial)
+        .join(Material, SupplierMaterial.material_id == Material.id)
+        .filter(SupplierMaterial.supplier_id == supplier.id)
+        .order_by(Material.name.asc())
+        .all()
+    )
+    materials = [
+        SupplierDetailMaterial(id=m_id, name=m_name, qualified=bool(is_qual))
+        for m_id, m_name, is_qual in materials_data
+    ]
+
+    # 4. Approved downstream supply relationships (supplies_to)
+    supplies_to_data = (
+        db.query(Supplier.id, Supplier.name, Material.name, Relationship.tier)
+        .select_from(Relationship)
+        .join(Supplier, Relationship.buyer_id == Supplier.id)
+        .join(Material, Relationship.material_id == Material.id)
+        .filter(
+            Relationship.supplier_id == supplier.id,
+            Relationship.status == "approved",
+        )
+        .order_by(Supplier.name.asc())
+        .all()
+    )
+    supplies_to = [
+        SupplierDetailSupplied(id=b_id, name=b_name, material=m_name)
+        for b_id, b_name, m_name, _ in supplies_to_data
+    ]
+
+    # 5. Approved upstream supply relationships (supplied_by)
+    supplied_by_data = (
+        db.query(Supplier.id, Supplier.name, Material.name)
+        .select_from(Relationship)
+        .join(Supplier, Relationship.supplier_id == Supplier.id)
+        .join(Material, Relationship.material_id == Material.id)
+        .filter(
+            Relationship.buyer_id == supplier.id,
+            Relationship.status == "approved",
+        )
+        .order_by(Supplier.name.asc())
+        .all()
+    )
+    supplied_by = [
+        SupplierDetailSupplied(id=s_id, name=s_name, material=m_name)
+        for s_id, s_name, m_name in supplied_by_data
+    ]
+
+    # 6. Minimum non-null tier among active outgoing relationships (or None)
+    outgoing_tiers = [r[3] for r in supplies_to_data if r[3] is not None]
+    min_tier = min(outgoing_tiers) if outgoing_tiers else None
+
+    return SupplierDetailResponse(
+        id=supplier.id,
+        name=supplier.name,
+        aliases=aliases,
+        country=supplier.country,
+        region=supplier.region,
+        capacity_per_month=supplier.capacity_per_month,
+        base_risk=float(supplier.base_risk) if supplier.base_risk is not None else 0.0,
+        tier=min_tier,
+        supplies_to=supplies_to,
+        supplied_by=supplied_by,
+        materials=materials,
     )

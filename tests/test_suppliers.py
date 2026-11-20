@@ -5,6 +5,7 @@ tier/risk calculations, error handling, and parameter constraints on an isolated
 """
 
 import pytest
+import json
 from datetime import datetime, date
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -12,17 +13,24 @@ from fastapi.exceptions import RequestValidationError
 from fastapi import Request
 
 from backend.main import app, validation_exception_handler
-from backend.api.suppliers import list_suppliers
+from backend.api.suppliers import list_suppliers, get_supplier
 from backend.models.db import (
     Base,
     Supplier,
+    SupplierAlias,
     Material,
     SupplierMaterial,
     Relationship,
     DisruptionEvent,
     Alert,
 )
-from backend.models.schemas import SupplierListResponse, SupplierListItem
+from backend.models.schemas import (
+    SupplierListResponse,
+    SupplierListItem,
+    SupplierDetailResponse,
+    SupplierDetailSupplied,
+    SupplierDetailMaterial,
+)
 
 
 @pytest.fixture
@@ -55,7 +63,7 @@ def test_db_session(tmp_path):
     # 2: Active, Tier 2, has alert -> effective_risk 75.0 (overriding base_risk 35.0)
     s2 = Supplier(
         id=2, name="Beta Latex Ltd", country="India", region="South Asia",
-        base_risk=35.0, is_active=True
+        capacity_per_month=120.0, base_risk=35.0, is_active=True
     )
     # 3: Active, Null Tier (no tier assigned), no alert -> base_risk 15.0
     s3 = Supplier(
@@ -69,6 +77,11 @@ def test_db_session(tmp_path):
     )
     session.add_all([s1, s2, s3, s4])
     session.flush()
+
+    # Aliases for s2 (inserted out of alphabetical order to test sorting)
+    a1 = SupplierAlias(supplier_id=2, alias="Beta Ltd")
+    a2 = SupplierAlias(supplier_id=2, alias="Beta Latex")
+    session.add_all([a1, a2])
 
     # Capabilities: s1 can supply Carbon Black
     sm1 = SupplierMaterial(supplier_id=1, material_id=3, is_qualified=True)
@@ -347,3 +360,139 @@ def test_validation_error_handler_format():
     assert "error" in data
     assert data["error"]["code"] == "VALIDATION_ERROR"
     assert "errors" in data["error"]["details"]
+
+
+# =============================================================================
+# Tests for GET /suppliers/{supplier_id}
+# =============================================================================
+
+def test_get_supplier_endpoint_routes_registered():
+    """Verifies that both /suppliers/{supplier_id} and /api/v1/suppliers/{supplier_id} are registered."""
+    route_map = {r.path: r.methods for r in app.routes if hasattr(r, "methods")}
+    assert "/suppliers/{supplier_id}" in route_map, "/suppliers/{supplier_id} is not registered"
+    assert "GET" in route_map["/suppliers/{supplier_id}"]
+    assert "/api/v1/suppliers/{supplier_id}" in route_map, "/api/v1/suppliers/{supplier_id} is not registered"
+    assert "GET" in route_map["/api/v1/suppliers/{supplier_id}"]
+
+
+def test_get_supplier_success(test_db_session):
+    """Verifies complete, successful retrieval of a supplier by ID."""
+    res = get_supplier(supplier_id=2, db=test_db_session)
+    assert isinstance(res, SupplierDetailResponse)
+    assert res.id == 2
+    assert res.name == "Beta Latex Ltd"
+    assert res.country == "India"
+    assert res.region == "South Asia"
+    assert res.capacity_per_month == 120.0
+    assert res.base_risk == 35.0
+    assert res.tier == 2
+
+
+def test_get_supplier_aliases_retrieval_and_sorting(test_db_session):
+    """Verifies aliases are retrieved from supplier_aliases and sorted alphabetically."""
+    res = get_supplier(supplier_id=2, db=test_db_session)
+    assert res.aliases == ["Beta Latex", "Beta Ltd"]
+
+    # Supplier 1 has no aliases
+    res1 = get_supplier(supplier_id=1, db=test_db_session)
+    assert res1.aliases == []
+
+
+def test_get_supplier_materials_and_qualification(test_db_session):
+    """Verifies registered materials are retrieved with qualification status, sorted alphabetically."""
+    res = get_supplier(supplier_id=2, db=test_db_session)
+    assert len(res.materials) == 1
+    mat = res.materials[0]
+    assert isinstance(mat, SupplierDetailMaterial)
+    assert mat.id == 1
+    assert mat.name == "Natural Latex"
+    assert mat.qualified is True
+
+
+def test_get_supplier_upstream_and_downstream_relationships(test_db_session):
+    """
+    Verifies:
+    - Downstream relationships in supplies_to (buyer id, buyer name, material)
+    - Upstream relationships in supplied_by (supplier id, supplier name, material)
+    """
+    res = get_supplier(supplier_id=2, db=test_db_session)
+
+    # Downstream: s2 supplies to s3 (Gamma Rubber) with Synthetic Rubber
+    assert len(res.supplies_to) == 1
+    downstream = res.supplies_to[0]
+    assert isinstance(downstream, SupplierDetailSupplied)
+    assert downstream.id == 3
+    assert downstream.name == "Gamma Rubber"
+    assert downstream.material == "Synthetic Rubber"
+
+    # Upstream: s1 (Alpha Corp) supplies to s2 with Natural Latex
+    assert len(res.supplied_by) == 1
+    upstream = res.supplied_by[0]
+    assert isinstance(upstream, SupplierDetailSupplied)
+    assert upstream.id == 1
+    assert upstream.name == "Alpha Corp"
+    assert upstream.material == "Natural Latex"
+
+
+def test_get_supplier_tier_calculation_and_null_tier(test_db_session):
+    """
+    Verifies:
+    - Minimum non-null tier among active outgoing relationships is returned (s1: tier 1, s2: tier 2)
+    - Null tier is returned when relationship tier is null (s3: tier None)
+    """
+    res1 = get_supplier(supplier_id=1, db=test_db_session)
+    assert res1.tier == 1
+
+    res2 = get_supplier(supplier_id=2, db=test_db_session)
+    assert res2.tier == 2
+
+    res3 = get_supplier(supplier_id=3, db=test_db_session)
+    assert res3.tier is None
+
+
+def test_get_supplier_not_found(test_db_session):
+    """Verifies 404 NOT_FOUND response envelope when supplier ID does not exist."""
+    res = get_supplier(supplier_id=999, db=test_db_session)
+    assert res.status_code == 404
+
+    body = json.loads(res.body.decode())
+    assert "error" in body
+    assert body["error"]["code"] == "NOT_FOUND"
+    assert body["error"]["message"] == "Supplier 999 does not exist."
+    assert body["error"]["details"] == {}
+
+
+def test_get_supplier_inactive_returns_404(test_db_session):
+    """Verifies 404 NOT_FOUND response envelope when supplier is inactive."""
+    res = get_supplier(supplier_id=4, db=test_db_session)
+    assert res.status_code == 404
+
+    body = json.loads(res.body.decode())
+    assert "error" in body
+    assert body["error"]["code"] == "NOT_FOUND"
+    assert body["error"]["message"] == "Supplier 4 does not exist."
+
+
+def test_get_supplier_invalid_id_422(test_db_session):
+    """Verifies 422 VALIDATION_ERROR response envelope when supplier ID is invalid (< 1)."""
+    res = get_supplier(supplier_id=0, db=test_db_session)
+    assert res.status_code == 422
+
+    body = json.loads(res.body.decode())
+    assert "error" in body
+    assert body["error"]["code"] == "VALIDATION_ERROR"
+    assert "details" in body["error"]
+
+
+def test_get_supplier_openapi_contract():
+    """Verifies OpenAPI schema documents /suppliers/{supplier_id} path parameter constraints."""
+    schema = app.openapi()
+    path_item = schema["paths"]["/suppliers/{supplier_id}"]["get"]
+    param = path_item["parameters"][0]
+
+    assert param["name"] == "supplier_id"
+    assert param["in"] == "path"
+    assert param["required"] is True
+    assert param["schema"]["type"] == "integer"
+    assert param["schema"]["minimum"] == 1
+    assert "200" in path_item["responses"]

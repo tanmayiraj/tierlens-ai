@@ -36,6 +36,54 @@ class SupplierRead(SupplierBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class SupplierListItem(BaseModel):
+    id: int
+    name: str
+    country: Optional[str] = None
+    region: Optional[str] = None
+    tier: Optional[int] = None
+    risk_score: Optional[float] = None
+    materials: List[str] = Field(default_factory=list)
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SupplierListResponse(BaseModel):
+    items: List[SupplierListItem] = Field(default_factory=list)
+    total: int
+    limit: int = 50
+    offset: int = 0
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SupplierDetailSupplied(BaseModel):
+    id: int
+    name: str
+    material: str
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SupplierDetailMaterial(BaseModel):
+    id: int
+    name: str
+    qualified: bool = False
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SupplierDetailResponse(BaseModel):
+    id: int
+    name: str
+    aliases: List[str] = Field(default_factory=list)
+    country: Optional[str] = None
+    region: Optional[str] = None
+    capacity_per_month: Optional[float] = None
+    base_risk: float = 0.0
+    tier: Optional[int] = None
+    supplies_to: List[SupplierDetailSupplied] = Field(default_factory=list)
+    supplied_by: List[SupplierDetailSupplied] = Field(default_factory=list)
+    materials: List[SupplierDetailMaterial] = Field(default_factory=list)
+    model_config = ConfigDict(from_attributes=True)
+
+
 class SupplierAliasBase(BaseModel):
     supplier_id: int
     alias: str

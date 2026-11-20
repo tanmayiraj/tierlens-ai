@@ -1,11 +1,14 @@
 import os
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from backend.config import settings
 from backend.database import get_db
+from backend.api.suppliers import router as suppliers_router
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -23,6 +26,29 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(RequestValidationError)
+def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Custom validation error handler adhering to API_SPEC.md Section 1.3:
+    {"error": {"code": "VALIDATION_ERROR", "message": "...", "details": {...}}}
+    """
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Field-level validation failed.",
+                "details": {"errors": exc.errors()},
+            }
+        },
+    )
+
+
+# Register API routers
+app.include_router(suppliers_router, prefix=settings.API_PREFIX)
+app.include_router(suppliers_router)
 
 
 @app.get("/health", tags=["System"])

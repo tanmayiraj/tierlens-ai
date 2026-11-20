@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from backend.config import settings
 from backend.database import get_db
 from backend.api.suppliers import router as suppliers_router
+from backend.api.relationships import router as relationships_router
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -49,6 +50,8 @@ def validation_exception_handler(request: Request, exc: RequestValidationError):
 # Register API routers
 app.include_router(suppliers_router, prefix=settings.API_PREFIX)
 app.include_router(suppliers_router)
+app.include_router(relationships_router, prefix=settings.API_PREFIX)
+app.include_router(relationships_router)
 
 
 @app.get("/health", tags=["System"])

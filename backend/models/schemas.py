@@ -162,6 +162,77 @@ class RelationshipEvidenceRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class RelationshipPartyRef(BaseModel):
+    id: int
+    name: str
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RelationshipMaterialRef(BaseModel):
+    id: int
+    name: str
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RelationshipListItem(BaseModel):
+    id: int
+    supplier: RelationshipPartyRef
+    buyer: RelationshipPartyRef
+    material: RelationshipMaterialRef
+    tier: Optional[int] = None
+    lead_time_days: Optional[int] = None
+    share_pct: Optional[float] = None
+    inventory_days: int = 0
+    confidence: Optional[float] = None
+    status: Literal["pending", "approved", "rejected"] = "pending"
+    evidence_count: int = 0
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RelationshipListResponse(BaseModel):
+    items: List[RelationshipListItem] = Field(default_factory=list)
+    total: int
+    limit: int = 50
+    offset: int = 0
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ReviewQueueItem(BaseModel):
+    relationship_id: int
+    supplier: str
+    buyer: str
+    material: str
+    confidence: Optional[float] = None
+    snippet: Optional[str] = None
+    document: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ReviewQueueResponse(BaseModel):
+    items: List[ReviewQueueItem] = Field(default_factory=list)
+    total: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ReviewCorrections(BaseModel):
+    share_pct: Optional[float] = Field(default=None, ge=0, le=100)
+    lead_time_days: Optional[int] = Field(default=None, ge=0)
+    model_config = ConfigDict(extra="forbid")
+
+
+class ReviewRequest(BaseModel):
+    action: Literal["approve", "reject"]
+    corrections: Optional[ReviewCorrections] = None
+    reviewed_by: Optional[str] = None
+
+
+class ReviewResponse(BaseModel):
+    id: int
+    status: Literal["approved", "rejected"]
+    graph_rebuild_required: bool = True
+    model_config = ConfigDict(from_attributes=True)
+
+
 class PlantBase(BaseModel):
     manufacturer_id: int
     name: str

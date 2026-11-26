@@ -1,0 +1,4 @@
+[DEMONSTRATION SAMPLE] Supply Agreement: RubberCore Industries to supply processed rubber compound to GripSeal Components.
+Monthly Volume: 50 MT specialty rubber compound.
+Delivery destination: GripSeal Pune Facility with 10 days standard lead time.
+Buyer: GripSeal Components, Supplier: RubberCore Industries, Material: Processed Rubber.

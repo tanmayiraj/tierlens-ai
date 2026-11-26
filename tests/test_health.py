@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from backend.main import app, health_check
 from backend.config import settings
 from backend.database import Base
+from backend.graph.service import graph_service
 
 
 @pytest.fixture
@@ -71,10 +72,29 @@ def test_health_check_response_structure_and_connectivity(isolated_db_session):
     assert data["database"] == "connected"
     assert "graph" in data
     assert isinstance(data["graph"], dict)
+    if graph_service.is_built:
+        assert data["graph"]["nodes"] == graph_service.node_count
+        assert data["graph"]["edges"] == graph_service.edge_count
+        assert data["graph"]["last_built"] == (graph_service.built_at.isoformat() if graph_service.built_at else None)
+    else:
+        assert data["graph"]["nodes"] == 0
+        assert data["graph"]["edges"] == 0
+        assert data["graph"]["last_built"] is None
+    assert data["llm"] in ("configured", "not_configured")
+
+
+def test_health_check_unbuilt_graph_reports_zero_without_auto_rebuild(isolated_db_session):
+    """
+    Verifies health_check does not automatically rebuild the graph and
+    reports 0 nodes, 0 edges, and last_built=None when the graph is not built.
+    """
+    graph_service.reset()
+    data = health_check(db=isolated_db_session)
+
     assert data["graph"]["nodes"] == 0
     assert data["graph"]["edges"] == 0
     assert data["graph"]["last_built"] is None
-    assert data["llm"] in ("configured", "not_configured")
+    assert not graph_service.is_built, "Health check should not automatically rebuild the graph"
 
 
 def test_health_check_database_disconnected():

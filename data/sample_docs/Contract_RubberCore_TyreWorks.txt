@@ -1,0 +1,4 @@
+[DEMONSTRATION SAMPLE] Supply Agreement: RubberCore Industries to supply processed rubber compound to TyreWorks Ltd.
+Monthly Volume: 150 MT vulcanized rubber compound.
+Delivery destination: TyreWorks Mumbai Plant with 10 days standard lead time.
+Buyer: TyreWorks Ltd, Supplier: RubberCore Industries, Material: Processed Rubber.

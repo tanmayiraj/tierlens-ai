@@ -283,7 +283,7 @@ class Alert(Base):
     __table_args__ = (
         CheckConstraint("severity_label IN ('low', 'medium', 'high', 'critical')", name="check_alert_severity_label"),
         CheckConstraint("risk_score BETWEEN 0 AND 100", name="check_alert_risk_score"),
-        CheckConstraint("status IN ('open', 'acknowledged', 'resolved')", name="check_alert_status"),
+        CheckConstraint("status IN ('open', 'investigating', 'acknowledged', 'resolved')", name="check_alert_status"),
         Index("idx_alerts_event", "event_id"),
         Index("idx_alerts_status", "status", "risk_score"),
     )

@@ -65,6 +65,16 @@ class GraphService:
         self._has_cycles: bool = False
         self._cycles: List[List[int]] = []
 
+    def reset(self) -> None:
+        """Resets the in-memory graph to an unbuilt, empty state."""
+        with self._lock:
+            self._graph.clear()
+            self._manufacturer_id = None
+            self._max_tier = 0
+            self._built_at = None
+            self._has_cycles = False
+            self._cycles = []
+
     # -------------------------------------------------------------------------
     # Properties
     # -------------------------------------------------------------------------

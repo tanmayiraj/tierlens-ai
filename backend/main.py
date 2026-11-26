@@ -8,8 +8,13 @@ from sqlalchemy.orm import Session
 
 from backend.config import settings
 from backend.database import get_db
+from backend.models.db import Supplier, Plant, ProductionLine
 from backend.api.suppliers import router as suppliers_router
 from backend.api.relationships import router as relationships_router
+from backend.api.graph import router as graph_router
+from backend.api.documents import router as documents_router
+from backend.api.risk import router as risk_router
+from backend.api.simulation import router as simulation_router
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -52,6 +57,14 @@ app.include_router(suppliers_router, prefix=settings.API_PREFIX)
 app.include_router(suppliers_router)
 app.include_router(relationships_router, prefix=settings.API_PREFIX)
 app.include_router(relationships_router)
+app.include_router(graph_router, prefix=settings.API_PREFIX)
+app.include_router(graph_router)
+app.include_router(documents_router, prefix=settings.API_PREFIX)
+app.include_router(documents_router)
+app.include_router(risk_router, prefix=settings.API_PREFIX)
+app.include_router(risk_router)
+app.include_router(simulation_router, prefix=settings.API_PREFIX)
+app.include_router(simulation_router)
 
 
 @app.get("/health", tags=["System"])
@@ -70,12 +83,23 @@ def health_check(db: Session = Depends(get_db)):
     llm_configured = bool(os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY"))
     llm_status = "configured" if llm_configured else "not_configured"
 
-    # Graph service is initialized in Phase 2; report current status
-    graph_info = {
-        "nodes": 0,
-        "edges": 0,
-        "last_built": None,
-    }
+    # Report current graph state (explicit rebuilding is handled via POST /graph/rebuild)
+    from backend.graph.service import graph_service
+
+    if graph_service.is_built:
+        production_line_count = db.query(ProductionLine).count()
+
+        graph_info = {
+            "nodes": graph_service.node_count + production_line_count,
+            "edges": graph_service.edge_count,
+            "last_built": graph_service.built_at.isoformat() if graph_service.built_at else None,
+        }
+    else:
+        graph_info = {
+            "nodes": 0,
+            "edges": 0,
+            "last_built": None,
+        }
 
     overall_status = "ok" if db_status == "connected" else "degraded"
 

@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Brand */
+  --color-brand-600: #1F4FD8;
+  --color-brand-500: #3B6AF0;
+  --color-brand-100: #E6EDFF;
+
+  /* Neutrals */
+  --color-bg: #F7F8FA;
+  --color-surface: #FFFFFF;
+  --color-surface-raised: #FFFFFF;
+  --color-border: #E3E6EC;
+  --color-text: #141824;
+  --color-text-muted: #5B6478;
+  --color-text-faint: #8A93A6;
+
+  /* Risk Semantics */
+  --risk-low: #2E9E6B;
+  --risk-low-bg: #E4F6EC;
+  --risk-low-text: #14663F;
+
+  --risk-medium: #E0A100;
+  --risk-medium-bg: #FFF4D6;
+  --risk-medium-text: #7A5800;
+
+  --risk-high: #E8742A;
+  --risk-high-bg: #FFE9DA;
+  --risk-high-text: #9A4210;
+
+  --risk-critical: #D6303F;
+  --risk-critical-bg: #FFE1E4;
+  --risk-critical-text: #A3141F;
+
+  /* Status and Utilities */
+  --color-success: #2E9E6B;
+  --color-info: #3B6AF0;
+  --color-warning: #E0A100;
+  --color-error: #D6303F;
+  --color-simulated: #7A4DE0;
+  --color-simulated-bg: #F3EEFF;
+
+  /* Tier Identification */
+  --tier-0: #141824;
+  --tier-1: #1F4FD8;
+  --tier-2: #00A3B4;
+  --tier-3: #8A6DE0;
+  --tier-4: #8A93A6;
+}
+
+.dark {
+  --color-bg: #0F1218;
+  --color-surface: #171B24;
+  --color-surface-raised: #1E2330;
+  --color-border: #2A3040;
+  --color-text: #ECEFF6;
+  --color-text-muted: #9AA3B8;
+  --color-text-faint: #6B7489;
+
+  --color-brand-600: #6C8EF5;
+  --color-brand-500: #85A2F8;
+  --color-brand-100: #1B2A5C;
+
+  --risk-low-bg: #14301F;
+  --risk-low-text: #6FD6A0;
+
+  --risk-medium-bg: #3A2D08;
+  --risk-medium-text: #F2C94C;
+
+  --risk-high-bg: #3D2210;
+  --risk-high-text: #F5A26B;
+
+  --risk-critical-bg: #3F1519;
+  --risk-critical-text: #FF8A94;
+
+  --tier-0: #ECEFF6;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  margin: 0;
+  padding: 0;
+}
